@@ -10,6 +10,7 @@ hizo. Se actualiza al cerrar cada fase.
 - **Objetivo final de la competencia:** predecir `item_cnt_month` de noviembre de 2015 (mes 34)
 - **Método de referencia:** [`references/TRANSFERENCIA_METODO.md`](references/TRANSFERENCIA_METODO.md) (proyecto `house_pricing`)
 - **Entorno:** conda `env_predict_future_sales`, Python 3.11.18
+- **Repositorio:** <https://github.com/dannygarcia-hue/predict_future_sales>
 
 ---
 
@@ -17,7 +18,7 @@ hizo. Se actualiza al cerrar cada fase.
 
 | Fase | Estado | Fecha |
 |---|---|---|
-| 0 · Estructura y entorno | **Cerrada** | 2026-11-12 |
+| 0 · Estructura y entorno | **Cerrada** — repo publicado en GitHub | 2026-11-12 |
 | 1 · EDA (`01_exploratory_data_analysis.ipynb`) | Pendiente de ejecución | — |
 | 2–10 · Limpieza en adelante | Fuera del alcance del Proyecto #1 | — |
 
