@@ -19,7 +19,7 @@ hizo. Se actualiza al cerrar cada fase.
 | Fase | Estado | Fecha |
 |---|---|---|
 | 0 · Estructura y entorno | **Cerrada** — repo publicado en GitHub | 2026-11-12 |
-| 1 · EDA (`01_exploratory_data_analysis.ipynb`) | Pendiente de ejecución | — |
+| 1 · EDA (`01_exploratory_data_analysis.ipynb`) | **Cerrada** — 127 celdas, 18 figuras, 0 errores | 2026-11-12 |
 | 2–10 · Limpieza en adelante | Fuera del alcance del Proyecto #1 | — |
 
 **Alcance acordado:** solo el Proyecto #1. Las fases 2 a 10 del método de referencia no se
@@ -173,6 +173,9 @@ reglas de la competencia. Relevante para el punto 10 y decisivo para el modelado
 | La plantilla v2 de cookiecutter falla con el comando `cookiecutter` | v2 exige el comando `ccds` | `pip install cookiecutter-data-science==2.3.0` y usar `ccds` |
 | `ccds --no-input` rechaza `dataset_storage` como cadena JSON | Compara contra `OrderedDict`, no contra la cadena | Omitir el parámetro: toma la primera opción, que es `none` |
 | Graficar 2.9 M filas | Escala 2000× mayor que el proyecto de referencia | Agregar **antes** de graficar, siempre |
+| `log1p` revienta la escala de color de un heatmap | Cuatro celdas (tienda, mes) suman −1 unidad y `log1p(-1) = -inf`; un solo `-inf` colapsa el `vmin`/`vmax` del mapa entero y todo sale del mismo color | Recortar a 0 **solo para graficar** (`m.clip(lower=0)`), nunca en los datos |
+| Un heatmap de magnitudes muy dispares no muestra ningún patrón temporal | Tres categorías aplastan a las otras 22 | Normalizar **fila por fila** contra el máximo de cada fila cuando la pregunta es *cuándo*, no *cuánto* |
+| La barra más alta se corta en el borde del eje | matplotlib no deja aire por encima de la barra máxima | `ax.margins(y=0.14)` |
 
 Se mantiene la trampa heredada del método: ejecutar siempre con el entorno activado
 (`conda run -n env_predict_future_sales --no-capture-output python ...`) por las DLLs de BLAS/MKL,
@@ -180,10 +183,51 @@ y escribir el código a un archivo en vez de pasarlo con `python -c` cuando llev
 
 ---
 
-## 4. Pendientes
+## 4. Decisiones de la Fase 1
 
-- [ ] Ejecutar `notebooks/01_exploratory_data_analysis.ipynb` completo.
-- [ ] Fijar fuente con cobertura cirílica para matplotlib.
-- [ ] Definir y escribir el criterio de selección de series representativas para ACF/PACF
-      (60 tiendas, 21 807 productos: no se grafican todas).
+### 4.1 Fuente para el cirílico
+
+**DejaVu Sans**, que es la de matplotlib por defecto, cubre el cirílico y el superíndice `²`. No
+hizo falta instalar nada. El notebook lo **verifica con un `assert`** en la celda de
+configuración en vez de darlo por hecho: si algún día la fuente cambia, falla ruidosamente en
+lugar de dibujar rectángulos vacíos en las etiquetas.
+
+### 4.2 Criterio de selección de series para ACF/PACF
+
+> Las **5 series con mayores ingresos acumulados**, entre las que tienen observaciones en los
+> **34 meses**.
+
+Ingresos y no unidades, porque las unidades premian artículos de acompañamiento —la bolsa de
+marca es el producto más vendido del dataset con 187 642 unidades y 0.03 % de los ingresos—
+cuya serie no representa demanda de catálogo. Historial completo, porque la ACF sobre una serie
+con huecos calcula rezagos entre observaciones que no están igualmente espaciadas.
+
+El filtro resultó durísimo en el nivel que importa: de **424 124** pares tienda-producto solo
+**102** tienen los 34 meses (0.02 %). Eso es en sí un resultado del EDA.
+
+### 4.3 Hallazgos nuevos que la Fase 0 no había visto
+
+- **El objetivo mensual puede ser negativo.** Cuatro celdas (tienda, mes) suman −1 unidad. Cierra
+  la puerta a cualquier transformación logarítmica, ya descartada por otra vía.
+- **Solo el 13.4 % de los pares de test vendió algo en el mes 33.** El 52 % tiene historial
+  *alguna vez*, pero el rezago 1 —la variable más informativa según la ACF— no existe para el
+  86.6 % de las filas a predecir.
+- **La estructura temporal se desvanece al desagregar.** La serie total tiene 3 rezagos
+  significativos; las de par tienda-producto, una o ninguna. Implica **un modelo global**, no uno
+  por serie.
+- **La PACF mensual se corta en el rezago 1** (0.638 → 0.099): firma de un AR(1).
+- **El rezago 12 no alcanza significancia** (+0.259 contra una banda de ±0.336) y no puede
+  alcanzarla: con 34 observaciones solo hay dos ciclos anuales. La estacionalidad de diciembre
+  está respaldada por la evidencia descriptiva, no por el correlograma.
+- **Tendencia decreciente sostenida**: −2 300 unidades/mes. Un modelo que use el promedio
+  histórico sin ponderar por recencia sobreestimará noviembre de 2015.
+
+---
+
+## 5. Pendientes
+
+- [x] Ejecutar `notebooks/01_exploratory_data_analysis.ipynb` completo.
+- [x] Fijar fuente con cobertura cirílica para matplotlib.
+- [x] Definir y escribir el criterio de selección de series representativas para ACF/PACF.
 - [ ] Screenshot del `git pull` para el entregable 3.
+- [ ] Fase 2 (limpieza), si se amplía el alcance: ver la lista de reservas al final del notebook.
