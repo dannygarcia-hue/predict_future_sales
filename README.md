@@ -1,15 +1,28 @@
 # predict_future_sales
 
-Análisis exploratorio de datos (EDA) sobre el dataset **Predict Future Sales** de Kaggle:
-ventas diarias de la cadena de tiendas rusa 1C Company, entre enero de 2013 y octubre de 2015.
+Pronóstico de ventas sobre el dataset **Predict Future Sales** de Kaggle: ventas diarias de la
+cadena de tiendas rusa 1C Company, entre enero de 2013 y octubre de 2015.
 
-El objetivo final de la competencia es predecir las ventas **mensuales** de cada par
-tienda-producto para noviembre de 2015. Este repositorio cubre el EDA que prepara esa etapa.
+El objetivo es predecir `item_cnt_month`, las unidades que venderá cada par tienda-producto en
+**noviembre de 2015**. El repositorio cubre el recorrido completo: del análisis exploratorio al
+archivo de predicciones listo para enviar.
 
-- **Proyecto #1** — Maestría · 4T 2026 · Product Management · Clase Cloud
+- Maestría · 4T 2026 · Product Management · Clase Cloud
 - **Autor:** Danny García
-- **Entregable principal:** [`notebooks/01_exploratory_data_analysis.ipynb`](notebooks/01_exploratory_data_analysis.ipynb)
 - **Bitácora de decisiones:** [`ESTADO_PROYECTO.md`](ESTADO_PROYECTO.md)
+
+## Los notebooks, en orden
+
+| Notebook | Qué hace | Qué produce |
+|---|---|---|
+| [`01_exploratory_data_analysis`](notebooks/01_exploratory_data_analysis.ipynb) | Análisis exploratorio: calidad, estacionalidad, ACF/PACF | Los hallazgos que orientan todo lo demás |
+| [`02_feature_exploration`](notebooks/02_feature_exploration.ipynb) | Decide qué variables crear y qué transformación recibe cada una | La lista escrita del proceso |
+| [`03_feature_creation`](notebooks/03_feature_creation.ipynb) | Convierte esa lista en un `Pipeline` de scikit-learn | `models/pipeline_features.pkl` |
+| [`04_model_training_n_tunning`](notebooks/04_model_training_n_tunning.ipynb) | Enfrenta 15 modelos y elige uno por RMSE | `models/pipeline_completo.pkl` |
+| [`05_inference_calculation`](notebooks/05_inference_calculation.ipynb) | Predice `test.csv` con el artefacto | `data/processed/submission.csv` |
+
+Cada notebook consume la salida del anterior y no se adelanta. El orden importa: la fuga de
+información se cuela cuando una fase usa datos que la siguiente debería desconocer.
 
 ---
 
@@ -92,6 +105,38 @@ El dataset **no trae** una columna de ingresos: se construye como `item_price ×
 
 ---
 
+## El pipeline
+
+El objeto que se guarda en `models/pipeline_completo.pkl` va de **datos crudos a predicciones**.
+Recibe únicamente `shop_id` e `item_id`, y se encarga de todo lo demás:
+
+```
+UnirCatalogos          -> pega categoría y nombres desde los catálogos que lleva dentro
+CaracteristicasCalendario -> mes, año, diciembre, días y fines de semana del mes
+LagFeatures            -> rezagos 1, 2, 3 y 12; medias móviles; agregados por tienda y producto
+Mapper                 -> extrae la ciudad del nombre de la tienda y el tipo de la categoría
+ColumnTransformer      -> imputa, recorta extremos, transforma el sesgo, escala y codifica
+<modelo ganador>       -> predice item_cnt_month
+```
+
+Los operadores propios viven en [`predict_future_sales/features.py`](predict_future_sales/features.py),
+no dentro de los notebooks. Un `.pkl` no guarda el código de las clases, solo dónde encontrarlas:
+si vivieran en un notebook, el artefacto no se podría abrir desde ningún otro sitio.
+
+### Verificación de que no hay fuga de información
+
+El riesgo central de un modelo de pronóstico es que un rezago mire hacia adelante. El síntoma es
+un resultado excelente en validación y un fracaso en producción, sin ninguna señal por el camino.
+
+Aquí se verifica con una prueba automatizada sobre datos de juguete, donde la respuesta correcta
+se conoce de memoria:
+
+```bash
+pytest tests/ -v
+```
+
+---
+
 ## Estructura del proyecto
 
 Generada con [Cookiecutter Data Science v2.3.0](https://cookiecutter-data-science.drivendata.org/).
@@ -108,7 +153,8 @@ Generada con [Cookiecutter Data Science v2.3.0](https://cookiecutter-data-scienc
 ├── references          <- Enunciado, método de referencia y diccionarios de datos
 ├── reports
 │   └── figures         <- Gráficas generadas
-├── predict_future_sales  <- Código fuente del proyecto
+├── predict_future_sales  <- Código fuente: operadores de ingeniería de características
+├── tests               <- Pruebas automatizadas (la de no-fuga es la importante)
 ├── ESTADO_PROYECTO.md  <- Bitácora de decisiones y su justificación
 ├── pyproject.toml      <- Configuración del paquete y de ruff
 └── requirements.txt    <- Dependencias con versiones fijadas

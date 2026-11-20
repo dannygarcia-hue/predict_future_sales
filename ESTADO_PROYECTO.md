@@ -3,7 +3,7 @@
 Documento de continuidad. Registra **las decisiones y su justificación**, no solo lo que se
 hizo. Se actualiza al cerrar cada fase.
 
-- **Proyecto:** Proyecto #1 — Exploratory Data Analysis (EDA)
+- **Proyecto:** #1 Exploratory Data Analysis (cerrado) · #2 Pipeline de Machine Learning (en curso)
 - **Dataset:** [Predict Future Sales](https://www.kaggle.com/competitions/competitive-data-science-predict-future-sales) (Kaggle, 1C Company)
 - **Autor:** Danny García — Maestría · 4T 2026 · Product Management · Clase Cloud
 - **Tipo de problema:** pronóstico de series de tiempo jerárquico (tienda × producto), mensual
@@ -20,10 +20,14 @@ hizo. Se actualiza al cerrar cada fase.
 |---|---|---|
 | 0 · Estructura y entorno | **Cerrada** — repo publicado en GitHub | 2026-11-12 |
 | 1 · EDA (`01_exploratory_data_analysis.ipynb`) | **Cerrada** — 127 celdas, 18 figuras, 0 errores | 2026-11-12 |
-| 2–10 · Limpieza en adelante | Fuera del alcance del Proyecto #1 | — |
+| 2 · Ingeniería de características (`02_feature_exploration`) | **Cerrada** | 2026-11-19 |
+| 3 · Pipeline de sklearn (`03_feature_creation`) | **Cerrada** | 2026-11-20 |
+| 4 · Torneo de modelos (`04_model_training_n_tunning`) | **Cerrada** | 2026-11-20 |
+| 5 · Inferencia (`05_inference_calculation`) | **Cerrada** | 2026-11-20 |
 
-**Alcance acordado:** solo el Proyecto #1. Las fases 2 a 10 del método de referencia no se
-ejecutan ahora, pero la estructura y el `requirements.txt` quedan preparados para no rehacerlas.
+**Alcance acordado:** Proyectos #1 y #2. El #2 (`references/Proyecto_2_Pipeline_Predict_Future_Sales.pdf`)
+pide cuatro notebooks encadenados, de la ingeniería de características a la inferencia sobre
+`test.csv`, con dos artefactos `.pkl` y un `.csv` de predicciones.
 
 ---
 
@@ -221,6 +225,118 @@ El filtro resultó durísimo en el nivel que importa: de **424 124** pares tiend
   está respaldada por la evidencia descriptiva, no por el correlograma.
 - **Tendencia decreciente sostenida**: −2 300 unidades/mes. Un modelo que use el promedio
   histórico sin ponderar por recencia sobreestimará noviembre de 2015.
+
+---
+
+## 4.4 El error que casi se entrega sin detectar
+
+Merece sección propia porque es el tipo de fallo contra el que todo el método está construido.
+
+El notebook de inferencia pasó **sus siete verificaciones**: número de filas correcto, valores
+finitos, rango [0, 20], identificadores únicos y alineados, formato oficial idéntico al de
+Kaggle, y relectura del archivo escrito. Ninguna falló. El archivo de envío era perfectamente
+válido.
+
+Y las predicciones estaban mal: media **0.0066** cuando el objetivo real promedia **0.2982**.
+Cincuenta veces menos.
+
+**La causa.** `UnirCatalogos` añade `date_block_num` al final cuando falta, que es el caso de
+`test.csv`; al entrenar viene al principio. Los nombres de columna eran correctos en ambos casos,
+pero como los operadores propios declaran sus nombres de salida, scikit-learn los reasigna **por
+posición**: cogía la lista aprendida en el ajuste y la pegaba sobre columnas que llegaban en otro
+orden. En inferencia, la columna llamada `shop_id` contenía identificadores de producto y la
+llamada `item_id` contenía el número de mes.
+
+**Lo que lo detectó** no fue ninguna de las siete comprobaciones, sino comparar la **magnitud**
+de lo predicho contra la magnitud de lo real. Las verificaciones comprobaban que las predicciones
+fueran *posibles*; ninguna comprobaba que fueran *sensatas*.
+
+**Lo que se añadió:** `test_el_orden_de_columnas_no_cambia_el_resultado`, que transforma las
+mismas filas con las columnas revueltas y sin `date_block_num`, y exige resultados idénticos.
+Es la prueba que `TRANSFERENCIA_METODO.md` §3 ya pedía —*"una prueba de que el orden de las
+columnas no cambia la predicción"*— y que no se había escrito.
+
+---
+
+## 5. Decisiones del Proyecto #2
+
+### 5.0 Resultado
+
+| | |
+|---|---|
+| Modelo ganador | `HistGradientBoostingRegressor` (`max_iter=200`, `learning_rate=0.05`, `max_leaf_nodes=31`) |
+| RMSE en validación (meses 27-33) | **0.7595** |
+| MAE | 0.2639 |
+| Mejora sobre repetir el mes anterior (1.0373) | **26.8 %** |
+| Predicción media del mes 34 | 0.2039 (el objetivo real del mes 33 promedia 0.2586) |
+| Criterio de desempate | Regla del error estándar; entre los empatados, 6 200 números ajustados frente a 9 450 |
+
+
+### 5.1 El operador `Mapper` se escribió desde cero
+
+El enunciado permite usar *"el operador Mapper definido durante las sesiones de clase"*. Se buscó
+en todo el disco —`Clase_Cloud/`, el árbol completo de `Maestria/`, `Downloads/`, `Documents/`,
+y también `DataFrameMapper` de `sklearn_pandas`— y **no existe en esta máquina**. Las notas de la
+sesión del 12/11 son capturas de la clase de Docker, sin código.
+
+Se implementó uno propio siguiendo la convención de los operadores del curso que sí están
+disponibles (`Downloads/Clase4-SL1.py`: `OutlierCapper`, `AgeBinning`, `DatetimeFeatures`).
+Hace dos cosas que `OrdinalEncoder` no puede hacer solo: **extrae** la ciudad de dentro del nombre
+de la tienda y **marca como nulo** cualquier valor no visto en el entrenamiento, en vez de
+inventarle un código.
+
+El `OutlierCapper` del material de clase se reutilizó con dos correcciones: devuelve un DataFrame
+en vez de un `ndarray` (el original perdía los nombres de columna y rompía el encadenado) y usa
+percentiles configurables en lugar del rango intercuartílico fijo, que sobre una distribución con
+el 85 % de ceros recortaría datos legítimos.
+
+### 5.2 Todo el código de los operadores vive en el paquete
+
+`predict_future_sales/features.py`, no en los notebooks. Un `.pkl` no guarda el código de las
+clases, solo dónde encontrarlas; si vivieran en el notebook, el artefacto fallaría con
+`ModuleNotFoundError` al abrirlo desde cualquier otro sitio, y los entregables 2 y 3 quedarían
+inservibles.
+
+### 5.3 La partición es temporal, fijada por el enunciado
+
+Meses **0–26** entrenan, **27–33** validan. Corrige la nota de §1.5, que proponía 0–32 / 33.
+Barajar sería fuga directa.
+
+### 5.4 El objetivo se recorta a [0, 20]
+
+No es una decisión de modelado: es la regla publicada de la competencia, que evalúa contra valores
+reales ya recortados. Afecta a 12 378 filas de 10.9 millones (0.11 %).
+
+### 5.5 Submuestra documentada para dos familias
+
+Con 8.4 GB de RAM y 4 núcleos, el bosque aleatorio y la red neuronal no terminan en tiempo
+razonable sobre 9.3 millones de filas. Se entrenan con una submuestra aleatoria de 1 millón, y
+**la tabla de resultados declara con cuántas filas se ajustó cada modelo**, porque comparar un
+modelo entrenado con 1 M contra otro con 9.3 M no es una comparación en igualdad de condiciones.
+
+### 5.6 Dos artefactos, uno de evidencia y otro de producción
+
+El modelo del torneo se ajustó con los meses 0–26 y es el que produjo el RMSE reportado. El
+`pipeline_completo.pkl` se reentrena con los 34 meses —los más recientes son los más valiosos con
+una tendencia decreciente— **heredando los hiperparámetros**, sin volver a buscarlos: buscarlos
+sobre los datos completos usaría las filas de validación para elegir.
+
+---
+
+## 6. Trampas nuevas del Proyecto #2
+
+| Síntoma | Causa | Qué hacer |
+|---|---|---|
+| El `.pkl` funciona en el notebook y falla al cargarlo fuera con `KeyError` en una columna | `sklearn.set_config(transform_output="pandas")` es una opción **global del proceso** y no se guarda dentro del artefacto | `pipeline.set_output(transform="pandas")`, que sí se almacena en el objeto |
+| Un paso propio tarda 160 s sobre 11 M de filas | Construir un `PeriodIndex` fila a fila con una comprensión de listas | Aritmética vectorizada de numpy: 160 s → 0.8 s |
+| Otro paso propio tarda 117 s | Aplicar una función de Python a 11 M de cadenas | Aplicarla a los **valores únicos** (60 nombres) y repartir el resultado: 117 s → 22 s |
+| El `ColumnTransformer` renombra todo a `tmp_col_name_0_1` | Los operadores propios no declaraban `get_feature_names_out` | Implementarlo; con cuidado, porque `transform` lo invoca y se forma una dependencia circular que hay que romper con un centinela |
+| Dos medias móviles distintas salen idénticas | La ventana de 6 meses se calculaba con los rezagos disponibles (1, 2 y 3), los mismos que la de 3 | Calcular los rezagos auxiliares 4, 5 y 6 y descartarlos después |
+| El DataFrame de características ocupa 3.35 GB | Dos columnas de texto en cirílico sobre 11 M de filas | Retirarlas en cuanto el `Mapper` las ha usado: 3.35 GB → 0.64 GB |
+| `SGDRegressor` devuelve un RMSE de 18.5 | No converge con los parámetros por defecto sobre estos datos | Se descartó esa familia y se documentó, en lugar de dejarla falseando el torneo |
+| **El modelo predice casi cero para todo** (media 0.0066 contra un objetivo real de 0.2982) | **Las columnas iban desplazadas.** `UnirCatalogos` añade `date_block_num` al final cuando falta —el caso de `test.csv`—, mientras que al entrenar viene al principio. Como el operador declara sus nombres de salida, scikit-learn los reasigna **por posición**: la columna llamada `shop_id` contenía identificadores de producto | Reordenar siempre a un orden canónico, y vigilarlo con `test_el_orden_de_columnas_no_cambia_el_resultado` |
+| Una celda del torneo pasa de 45 minutos a más de 2 horas, con el mismo código | La máquina paginando: 0.78 GB de RAM libre y 2.7 GB ya volcados a disco | Cerrar aplicaciones antes de entrenar, y reducir el pico de memoria (ver la fila siguiente) |
+| El pico de memoria dobla lo necesario al transformar | `pipe.transform(X)` devuelve un DataFrame de 1.08 GB y `.to_numpy()` crea una segunda copia antes de liberar la primera | Transformar por bloques escribiendo sobre una matriz ya reservada: pico de 2.2 a 1.2 GB |
 
 ---
 

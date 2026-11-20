@@ -13,10 +13,22 @@ data/**
 !data/**/
 !data/**/.gitkeep
 
-# Artefactos de modelo (fases posteriores)
+# Excepcion: el archivo de predicciones es el entregable 4 del Proyecto #2.
+# Los datos crudos de Kaggle (94 MB) siguen excluidos por la regla de arriba.
+!data/processed/submission.csv
+
+# Artefactos de modelo
 models/**
 !models/**/
 !models/**/.gitkeep
+
+# Excepciones: estos tres SI se versionan porque son entregables evaluables del
+# Proyecto #2, no artefactos intermedios regenerables. Pesan 16 MB en total,
+# muy por debajo del limite de 100 MB por archivo de GitHub, y asi el profesor
+# encuentra todo en un unico enlace.
+!models/pipeline_features.pkl
+!models/pipeline_completo.pkl
+!models/torneo_resultados.csv
 
 # Figuras generadas por el notebook: se regeneran al ejecutarlo
 reports/figures/**
@@ -222,3 +234,5 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+# Configuracion local del editor
+.vscode/
