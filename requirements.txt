@@ -26,12 +26,20 @@ ipython==9.18.1
 jupyterlab==4.6.6
 notebook==7.6.5
 
+# --- Serializacion de los artefactos .pkl ---
+# Lo instala scikit-learn por su cuenta, pero los notebooks 03, 04 y 05 lo
+# importan directamente, asi que se declara: depender de que otra libreria lo
+# arrastre es fragil.
+joblib==1.6.0
+
 # --- Utilidades y calidad ---
 loguru==0.8.0
 python-dotenv==1.2.4
+psutil==7.2.2      # medicion de memoria en el notebook 04
 tqdm==4.70.1
 typer==0.29.1
 ruff==0.17.5
+pytest==9.2.0      # pruebas de los operadores (pytest tests/ -v)
 
 # --- Documentacion ---
 mkdocs==1.6.1
